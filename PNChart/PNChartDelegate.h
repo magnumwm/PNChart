@@ -28,6 +28,10 @@
 - (void)userClickedOnBarAtIndex:(NSInteger)barIndex;
 
 
-- (void)userClickedOnPieIndexItem:(NSInteger)pieIndex;
+- (void)userClickedOnPieIndexItem:(NSInteger)pieIndex atPoint:(CGPoint)point;
 - (void)didUnselectPieItem;
+
+- (void)pieChartTouchBegin;
+- (void)pieChartTouchEnd;
+
 @end

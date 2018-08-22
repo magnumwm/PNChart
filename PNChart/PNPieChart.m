@@ -22,6 +22,9 @@
 
 @property (nonatomic, strong) NSMutableDictionary *selectedItems;
 
+//! @brief 上一次点击的section索引值
+@property (assign, nonatomic, readwrite) NSInteger lastTouchSectionIndex;
+
 - (void)loadDefault;
 
 - (UILabel *)descriptionLabelForItemAtIndex:(NSUInteger)index;
@@ -48,6 +51,11 @@
     if(self){
         _items = [NSArray arrayWithArray:items];
         [self baseInit];
+        
+        self.lastTouchSectionIndex = -1;
+        
+        UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTapPieChartEvent:)];
+        [self addGestureRecognizer:tapGesture];
     }
     
     return self;
@@ -121,12 +129,12 @@
         CGFloat radius = _innerCircleRadius + (_outerCircleRadius - _innerCircleRadius) / 2;
         CGFloat borderWidth = _outerCircleRadius - _innerCircleRadius;
         
-        CAShapeLayer *currentPieLayer =	[self newCircleLayerWithRadius:radius
-                                                           borderWidth:borderWidth
-                                                             fillColor:[UIColor clearColor]
-                                                           borderColor:currentItem.color
-                                                       startPercentage:startPercentage
-                                                         endPercentage:endPercentage];
+        CAShapeLayer *currentPieLayer =    [self newCircleLayerWithRadius:radius
+                                                              borderWidth:borderWidth
+                                                                fillColor:[UIColor clearColor]
+                                                              borderColor:currentItem.color
+                                                          startPercentage:startPercentage
+                                                            endPercentage:endPercentage];
         [_pieLayer addSublayer:currentPieLayer];
     }
     
@@ -303,8 +311,8 @@
         index ++;
     }
     
-    if ([self.delegate respondsToSelector:@selector(userClickedOnPieIndexItem:)]) {
-        [self.delegate userClickedOnPieIndexItem:index];
+    if ([self.delegate respondsToSelector:@selector(userClickedOnPieIndexItem:atPoint:)]) {
+        [self.delegate userClickedOnPieIndexItem:index atPoint:touchLocation];
     }
     
     if (self.shouldHighlightSectorOnTouch)
@@ -320,13 +328,12 @@
         CGFloat red,green,blue,alpha;
         UIColor *old = currentItem.color;
         [old getRed:&red green:&green blue:&blue alpha:&alpha];
-        alpha /= 2;
         UIColor *newColor = [UIColor colorWithRed:red green:green blue:blue alpha:alpha];
         
         CGFloat startPercentage = [self startPercentageForItemAtIndex:index];
         CGFloat endPercentage   = [self endPercentageForItemAtIndex:index];
         
-        self.sectorHighlight = [self newCircleLayerWithRadius:_outerCircleRadius + 5
+        self.sectorHighlight = [self newCircleLayerWithRadius:_outerCircleRadius + 4
                                                   borderWidth:10
                                                     fillColor:[UIColor clearColor]
                                                   borderColor:newColor
@@ -355,13 +362,49 @@
     }
 }
 
+#if 0
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event
 {
-    for (UITouch *touch in touches) {
-        CGPoint touchLocation = [touch locationInView:_contentView];
-        [self didTouchAt:touchLocation];
+    if ([self.delegate respondsToSelector:@selector(pieChartTouchBegin)]) {
+        [self.delegate pieChartTouchBegin];
     }
+    
+    UITouch *anyTouch = touches.anyObject;
+    CGPoint touchLocation = [anyTouch locationInView:_contentView];
+    [self didTouchAt:touchLocation];
 }
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
+{
+    if ([self.delegate respondsToSelector:@selector(pieChartTouchBegin)]) {
+        [self.delegate pieChartTouchBegin];
+    }
+    
+    UITouch *anyTouch = touches.anyObject;
+    CGPoint touchLocation = [anyTouch locationInView:_contentView];
+    [self didTouchAt:touchLocation];
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
+{
+    if ([self.delegate respondsToSelector:@selector(pieChartTouchEnd)]) {
+        [self.delegate pieChartTouchEnd];
+    }
+    
+    CGPoint fakePoint = CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2);
+    [self didTouchAt:fakePoint];
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event
+{
+    if ([self.delegate respondsToSelector:@selector(pieChartTouchEnd)]) {
+        [self.delegate pieChartTouchEnd];
+    }
+    
+    CGPoint fakePoint = CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2);
+    [self didTouchAt:fakePoint];
+}
+#endif
 
 - (CGFloat) findPercentageOfAngleInCircle:(CGPoint)center fromPoint:(CGPoint)reference{
     //Find angle of line Passing In Reference And Center
@@ -493,6 +536,42 @@
 -(void)layoutSubviews {
     [super layoutSubviews];
     [self strokeChart];
+}
+
+#pragma mark -
+#pragma mark 处理点击手势
+- (void)handleTapPieChartEvent:(UITapGestureRecognizer *)gesture
+{
+    CGPoint touchLocation = [gesture locationInView:self];
+    CGPoint circleCenter = CGPointMake(_contentView.bounds.size.width/2, _contentView.bounds.size.height/2);
+    CGFloat distanceFromCenter = sqrtf(powf((touchLocation.y - circleCenter.y),2) + powf((touchLocation.x - circleCenter.x),2));
+    CGPoint fakePoint = CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2);
+    
+    if (distanceFromCenter < _innerCircleRadius) {
+        [self didTouchAt:fakePoint];
+        return;
+    }
+    
+    CGFloat percentage = [self findPercentageOfAngleInCircle:circleCenter fromPoint:touchLocation];
+    int index = 0;
+    while (percentage > [self endPercentageForItemAtIndex:index]) {
+        index ++;
+    }
+    
+    if (index == self.lastTouchSectionIndex) {
+        self.lastTouchSectionIndex = -1;
+        [self didTouchAt:fakePoint];
+    } else {
+        self.lastTouchSectionIndex = index;
+        [self didTouchAt:touchLocation];
+    }
+}
+
+- (void)hidePieChartDetail
+{
+    CGPoint fakePoint = CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2);
+    self.lastTouchSectionIndex = -1;
+    [self didTouchAt:fakePoint];
 }
 
 @end

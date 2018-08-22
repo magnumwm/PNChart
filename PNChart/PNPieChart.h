@@ -61,6 +61,8 @@
 /** show only tiles, not values or percentage */
 @property (nonatomic) BOOL hideValues;
 
+- (void)hidePieChartDetail;
+
 - (void)strokeChart;
 
 - (void)recompute;
