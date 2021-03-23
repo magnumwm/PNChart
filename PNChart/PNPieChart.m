@@ -542,6 +542,10 @@
 #pragma mark 处理点击手势
 - (void)handleTapPieChartEvent:(UITapGestureRecognizer *)gesture
 {
+    if (self.items.count == 0) {
+        return;
+    }
+
     CGPoint touchLocation = [gesture locationInView:self];
     CGPoint circleCenter = CGPointMake(_contentView.bounds.size.width/2, _contentView.bounds.size.height/2);
     CGFloat distanceFromCenter = sqrtf(powf((touchLocation.y - circleCenter.y),2) + powf((touchLocation.x - circleCenter.x),2));
